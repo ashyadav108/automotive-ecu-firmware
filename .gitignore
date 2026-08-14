@@ -1,0 +1,35 @@
+# Build directory
+build/
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+
+# Compiled binaries
+*.exe
+*.out
+*.o
+*.obj
+*.a
+
+# VS Code
+.vscode/
+
+# Visual Studio
+.vs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
