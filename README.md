@@ -1,12 +1,12 @@
 # Automotive ECU Firmware
 
-A modular C-based Automotive ECU firmware project developed with **CMake** and tested using **CTest**. The project simulates MCU peripherals and demonstrates core embedded automotive software concepts including sensor processing, fault management, DTC handling, diagnostics, CAN communication, watchdog supervision, and reset management.
+A modular C-based Automotive ECU firmware project developed using **CMake** and tested with **CTest**. The project simulates MCU peripherals and demonstrates embedded automotive software concepts including GPIO, ADC, UART, CAN communication, sensor processing, fault management, DTC handling, diagnostics, watchdog supervision, and reset management.
 
 ## Overview
 
-This project models a simplified automotive Electronic Control Unit (ECU) running on a simulated microcontroller environment.
+This project implements a simplified Automotive Electronic Control Unit (ECU) running in a simulated MCU environment.
 
-The firmware is organized into multiple layers to resemble a typical embedded software architecture:
+The firmware is organized into multiple layers:
 
 ```text
 Application
@@ -25,6 +25,7 @@ HAL
     |
     +-- GPIO HAL
     +-- ADC HAL
+    +-- CAN HAL
     |
     v
 Drivers
@@ -39,24 +40,29 @@ Drivers
 Simulated MCU Registers
 ```
 
+The project can be built and tested on a PC using GCC and CMake without physical automotive hardware.
+
 ## Features
 
 * Modular embedded C firmware architecture
 * C11 standard
-* CMake-based build system
-* Simulated MCU peripheral registers
+* CMake build system
+* CTest-based unit testing
+* Simulated MCU registers
 * GPIO driver
 * UART driver
 * ADC driver
-* CAN communication
+* CAN driver
+* Watchdog driver
+* GPIO HAL
+* ADC HAL
+* CAN HAL
 * Temperature sensor processing
 * Fault detection and management
 * Diagnostic Trouble Code (DTC) management
-* Diagnostic CAN request/response handling
+* CAN-based diagnostic communication
 * ECU reset management
-* Watchdog supervision
-* Unit testing using CTest
-* PC-based firmware simulation without physical hardware
+* PC-based firmware simulation
 
 ## Project Structure
 
@@ -64,31 +70,46 @@ Simulated MCU Registers
 automotive-ecu-firmware/
 │
 ├── app/
-│   └── main.c
+│   ├── main.c
+│   └──
 │
 ├── drivers/
-│   ├── gpio.c
-│   ├── uart.c
 │   ├── adc.c
+│   ├── adc.h
 │   ├── can.c
-│   └── watchdog.c
+│   ├── can.h
+│   ├── gpio.c
+│   ├── gpio.h
+│   ├── uart.c
+│   ├── uart.h
+│   ├── watchdog.c
+│   └── watchdog.h
 │
 ├── hal/
+│   ├── hal_adc.c
+│   ├── hal_adc.h
+│   ├── hal_can.c
+│   ├── hal_can.h
 │   ├── hal_gpio.c
-│   └── hal_adc.c
+│   └── hal_gpio.h
 │
 ├── mcu_sim/
 │   ├── mcu_registers.c
 │   └── mcu_registers.h
 │
 ├── sensors/
-│   └── sensor_manager.c
+│   ├── sensor_manager.c
+│   └── sensor_manager.h
 │
 ├── services/
-│   ├── fault_manager.c
 │   ├── diagnostic.c
+│   ├── diagnostic.h
 │   ├── dtc_manager.c
-│   └── reset_manager.c
+│   ├── dtc_manager.h
+│   ├── fault_manager.c
+│   ├── fault_manager.h
+│   ├── reset_manager.c
+│   └── reset_manager.h
 │
 ├── tests/
 │   └── test_runner.c
@@ -103,11 +124,13 @@ automotive-ecu-firmware/
 └── README.md
 ```
 
+The `.h` files contain module interfaces, data types, constants, and function declarations, while the `.c` files contain the corresponding implementations.
+
 ## Temperature Monitoring
 
-The simulated ADC input is converted into a temperature value.
+The simulated ADC input is converted into a temperature value by the Sensor Manager.
 
-Example test conditions:
+Example conditions tested by the firmware:
 
 | ADC Input | Temperature | State    | Fault               |
 | --------: | ----------: | -------- | ------------------- |
@@ -119,31 +142,44 @@ At the critical temperature condition, the over-temperature DTC becomes active.
 
 ## Fault and DTC Management
 
-The firmware contains separate Fault Manager and DTC Manager modules.
-
-The basic flow is:
+The temperature processing flow is:
 
 ```text
-Temperature Sensor
-       |
-       v
+ADC
+ |
+ v
+Sensor Manager
+ |
+ v
+Temperature State
+ |
+ v
 Fault Manager
-       |
-       v
-Fault Detected
-       |
-       v
+ |
+ v
 DTC Manager
-       |
-       v
-DTC ACTIVE
+ |
+ v
+DTC Status
 ```
 
-The DTC can subsequently be cleared through the diagnostic interface.
+The Fault Manager determines the current fault condition.
+
+The DTC Manager handles setting, checking, and clearing Diagnostic Trouble Codes.
 
 ## CAN Communication
 
-The project contains a simulated CAN interface.
+CAN communication is implemented through the CAN driver and CAN HAL.
+
+Relevant files are:
+
+```text
+drivers/can.c
+drivers/can.h
+
+hal/hal_can.c
+hal/hal_can.h
+```
 
 The normal sensor CAN frame uses:
 
@@ -152,9 +188,9 @@ CAN ID : 0x100
 DLC    : 2
 ```
 
-The first data byte represents the sensor state and the second data byte contains the temperature value.
+The first data byte contains the sensor state and the second data byte contains the temperature value.
 
-### Diagnostic CAN
+## Diagnostic CAN Communication
 
 Diagnostic communication uses:
 
@@ -169,7 +205,14 @@ Supported diagnostic operations include:
 * Read DTC
 * Clear fault
 
-Example DTC request:
+The diagnostic implementation is located in:
+
+```text
+services/diagnostic.c
+services/diagnostic.h
+```
+
+Example diagnostic request:
 
 ```text
 CAN ID : 0x700
@@ -187,26 +230,72 @@ DATA   : 05 02
 
 ## Watchdog
 
-The project includes a simulated watchdog timer.
+The watchdog is implemented in:
 
-The watchdog supports:
+```text
+drivers/watchdog.c
+drivers/watchdog.h
+```
+
+It supports:
 
 * Initialization
-* Periodic kick
+* Watchdog kick
 * Simulated time progression
 * Timeout detection
 
-The ECU application kicks the watchdog during the normal ECU execution cycle.
+The application initializes and periodically kicks the watchdog during the ECU execution cycle.
 
 ## Reset Management
 
-The Reset Manager tracks ECU reset information including:
+Reset management is implemented in:
+
+```text
+services/reset_manager.c
+services/reset_manager.h
+```
+
+The Reset Manager tracks:
 
 * Reset reason
 * Reset count
 * Power-on reset
 * Watchdog reset
 * Software reset
+
+## Hardware Abstraction Layer
+
+The project contains three HAL modules:
+
+```text
+hal/hal_gpio.c
+hal/hal_gpio.h
+
+hal/hal_adc.c
+hal/hal_adc.h
+
+hal/hal_can.c
+hal/hal_can.h
+```
+
+The HAL layer provides an abstraction between higher-level firmware modules and the peripheral drivers.
+
+## Simulated MCU
+
+The simulated MCU is implemented in:
+
+```text
+mcu_sim/mcu_registers.c
+mcu_sim/mcu_registers.h
+```
+
+The current simulated registers include:
+
+* GPIO registers
+* UART registers
+* ADC registers
+
+This allows the drivers to operate in a PC-based simulated hardware environment.
 
 ## Building the Project
 
@@ -215,7 +304,8 @@ The Reset Manager tracks ECU reset information including:
 * GCC
 * CMake
 * CTest
-* Linux, WSL, or another GCC-compatible environment
+* Linux or WSL
+* Git
 
 ### Configure
 
@@ -223,7 +313,7 @@ The Reset Manager tracks ECU reset information including:
 cmake -S . -B build
 ```
 
-### Build the ECU
+### Build ECU
 
 ```bash
 cmake --build build --target ecu
@@ -239,13 +329,13 @@ cmake --build build --target firmware_tests
 
 The ECU executable accepts a simulated ADC value as a command-line argument.
 
-### Normal temperature
+### Normal Temperature
 
 ```bash
 ./build/ecu 2500
 ```
 
-Expected output includes:
+Expected result:
 
 ```text
 TEMP     : 25.00 C
@@ -254,13 +344,13 @@ FAULT CODE: 0x00
 DTC STATUS: CLEAR
 ```
 
-### Warning temperature
+### Warning Temperature
 
 ```bash
 ./build/ecu 8000
 ```
 
-Expected output includes:
+Expected result:
 
 ```text
 TEMP     : 80.00 C
@@ -268,13 +358,13 @@ STATUS   : WARNING
 FAULT CODE: 0x01
 ```
 
-### Critical temperature
+### Critical Temperature
 
 ```bash
 ./build/ecu 10500
 ```
 
-Expected output includes:
+Expected result:
 
 ```text
 TEMP     : 105.00 C
@@ -291,7 +381,7 @@ Build the test executable:
 cmake --build build --target firmware_tests
 ```
 
-Run the complete test suite:
+Run the test suite:
 
 ```bash
 ctest --test-dir build --output-on-failure
@@ -302,19 +392,27 @@ Latest verified result:
 ```text
 1/1 Test #1: ECU_Firmware_Unit_Tests .......... Passed
 
-100% tests passed, 0 tests failed
+100% tests passed
+0 tests failed
+```
+
+The test runner is implemented in:
+
+```text
+tests/test_runner.c
 ```
 
 ## Testing Coverage
 
-The unit test suite covers:
+The test suite covers:
 
 * GPIO initialization and output
 * ADC initialization
 * Temperature conversion
 * Sensor state detection
 * Fault detection
-* DTC activation and clearing
+* DTC activation
+* DTC clearing
 * Reset management
 * Watchdog operation
 * CAN initialization
@@ -323,55 +421,62 @@ The unit test suite covers:
 * Diagnostic DTC request
 * Diagnostic fault clearing
 
+The complete test suite contains **39 tests**.
+
 ## Documentation
 
-Additional documentation is available in the `docs/` directory:
+Additional project documentation is available in `docs/`:
 
-* [`docs/architecture.md`](docs/architecture.md) — Software architecture and module organization
-* [`docs/diagnostics.md`](docs/diagnostics.md) — CAN diagnostics, DTCs, and diagnostic services
-* [`docs/testing.md`](docs/testing.md) — Unit and integration testing
+* `docs/architecture.md` — Software architecture and module organization
+* `docs/diagnostics.md` — CAN communication, diagnostics, and DTC handling
+* `docs/testing.md` — Build process and testing information
 
 ## Technologies Used
 
-| Category          | Technologies                          |
-| ----------------- | ------------------------------------- |
-| Language          | C                                     |
-| Standard          | C11                                   |
-| Build System      | CMake                                 |
-| Testing           | CTest                                 |
-| Compiler          | GCC                                   |
-| Communication     | CAN, UART                             |
-| Embedded Concepts | GPIO, ADC, Watchdog, DTC, Diagnostics |
-| Development       | VS Code, Linux/WSL                    |
+| Category          | Technology           |
+| ----------------- | -------------------- |
+| Language          | C                    |
+| Standard          | C11                  |
+| Build System      | CMake                |
+| Testing           | CTest                |
+| Compiler          | GCC                  |
+| Communication     | CAN, UART            |
+| Hardware Concepts | GPIO, ADC, Watchdog  |
+| Diagnostics       | DTC, CAN Diagnostics |
+| Development       | VS Code, Linux/WSL   |
 
 ## Project Goals
 
 This project was developed to gain practical experience with:
 
 * Embedded C programming
-* Automotive ECU software architecture
-* Hardware abstraction
+* Automotive ECU architecture
 * Peripheral drivers
+* Hardware abstraction
 * CAN communication
-* Fault and diagnostic systems
-* Watchdog and reset handling
+* Sensor processing
+* Fault handling
+* Diagnostic systems
+* Watchdog supervision
+* Reset management
 * Unit testing
-* CMake-based embedded development
-* Software modularity and maintainability
+* CMake-based development
+* PC-based embedded firmware simulation
 
 ## Future Improvements
 
 Possible future extensions include:
 
-* UDS-style diagnostic services
-* More CAN diagnostic messages
-* EEPROM/NVM-based DTC storage
 * Additional automotive sensors
+* More diagnostic services
+* UDS-style diagnostic services
 * CAN message filtering
-* More comprehensive fault injection
+* EEPROM/NVM-based DTC storage
+* Fault injection
+* Static analysis
+* Coding-standard checks
 * Hardware-in-the-loop testing
-* Static analysis and coding-standard checks
-* CI/CD testing using GitHub Actions
+* GitHub Actions CI/CD
 
 ## Author
 
@@ -380,4 +485,4 @@ Possible future extensions include:
 M.Tech — Communication System Engineering
 National Institute of Technology, Jamshedpur
 
-This project is intended as a practical embedded/automotive firmware portfolio project demonstrating modular C development, testing, diagnostics, and ECU software concepts.
+This project is intended as an embedded and automotive firmware portfolio project demonstrating modular C development, hardware abstraction, CAN communication, diagnostics, fault handling, watchdog supervision, reset management, and automated testing.

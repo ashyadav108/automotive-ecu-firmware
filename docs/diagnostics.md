@@ -1,37 +1,154 @@
-# Automotive ECU Diagnostic Communication
+# Automotive ECU Diagnostics
 
 ## 1. Overview
 
-The ECU firmware contains a simulated diagnostic communication system based on CAN frames.
+The project includes a simulated automotive diagnostic system based on CAN communication.
 
-The Diagnostic Manager receives diagnostic requests, processes them, and generates a response frame.
+The diagnostic functionality is implemented using the CAN driver, CAN HAL, Diagnostic Manager, Fault Manager, and DTC Manager.
 
-The diagnostic communication implemented in this project demonstrates basic ECU diagnostic functions including ECU status reading, DTC reading, and fault clearing.
+Relevant files are:
 
-## 2. CAN Diagnostic IDs
+```text
+drivers/can.c
+drivers/can.h
 
-The simulated diagnostic communication uses the following CAN identifiers:
+hal/hal_can.c
+hal/hal_can.h
 
-| CAN ID  | Purpose             |
-| ------- | ------------------- |
-| `0x700` | Diagnostic request  |
-| `0x708` | Diagnostic response |
+services/diagnostic.c
+services/diagnostic.h
 
-## 3. Supported Diagnostic Services
+services/fault_manager.c
+services/fault_manager.h
 
-The current implementation supports:
+services/dtc_manager.c
+services/dtc_manager.h
+```
 
-| Service            | Function                   |
-| ------------------ | -------------------------- |
-| `DIAG_READ_STATUS` | Read current ECU status    |
-| `DIAG_READ_DTC`    | Read current DTC status    |
-| `DIAG_CLEAR_FAULT` | Clear the active fault/DTC |
+## 2. Diagnostic Architecture
 
-## 4. Read ECU Status
+The diagnostic communication path is:
 
-The tester sends a diagnostic request using CAN ID `0x700`.
+```text
+CAN Request
+     |
+     v
+CAN Driver / CAN HAL
+     |
+     v
+Diagnostic Manager
+     |
+     +---- Read Status
+     |
+     +---- Read DTC
+     |
+     +---- Clear Fault
+     |
+     v
+CAN Response
+```
 
-Example:
+## 3. CAN Communication
+
+The CAN peripheral is implemented in:
+
+```text
+drivers/can.c
+drivers/can.h
+```
+
+The CAN abstraction is implemented in:
+
+```text
+hal/hal_can.c
+hal/hal_can.h
+```
+
+The CAN driver provides:
+
+* CAN initialization
+* CAN frame transmission
+* CAN frame validation
+
+A CAN frame contains:
+
+```text
+CAN ID
+DLC
+Data
+```
+
+The maximum simulated CAN data length is 8 bytes.
+
+## 4. Normal Sensor CAN Message
+
+The ECU transmits sensor information using:
+
+```text
+CAN ID : 0x100
+DLC    : 2
+```
+
+The frame format is:
+
+```text
+DATA[0] = Sensor State
+DATA[1] = Temperature
+```
+
+For example, at 25°C:
+
+```text
+CAN ID : 0x100
+DLC    : 2
+DATA   : 00 19
+```
+
+At 80°C:
+
+```text
+CAN ID : 0x100
+DLC    : 2
+DATA   : 01 50
+```
+
+At 105°C:
+
+```text
+CAN ID : 0x100
+DLC    : 2
+DATA   : 02 69
+```
+
+## 5. Diagnostic CAN IDs
+
+The simulated diagnostic communication uses:
+
+```text
+Request ID  : 0x700
+Response ID : 0x708
+```
+
+The Diagnostic Manager is implemented in:
+
+```text
+services/diagnostic.c
+services/diagnostic.h
+```
+
+## 6. Diagnostic Commands
+
+The current diagnostic implementation supports:
+
+```text
+01 - Read ECU Status
+05 - Read DTC
+04 - Clear Fault
+```
+
+### Read ECU Status
+
+Request:
 
 ```text
 CAN ID : 0x700
@@ -39,23 +156,19 @@ DLC    : 1
 DATA   : 01
 ```
 
-The ECU processes the request and sends a response using CAN ID `0x708`.
-
-Example for a normal ECU condition:
+Response:
 
 ```text
 CAN ID : 0x708
 DLC    : 2
-DATA   : 01 00
+DATA   : 01 XX
 ```
 
-The first byte identifies the diagnostic service and the second byte represents the current status/fault information.
+The second byte represents the current fault/status information.
 
-## 5. Read DTC
+## 7. Read DTC
 
-The tester can request the current Diagnostic Trouble Code status.
-
-Example request:
+Request:
 
 ```text
 CAN ID : 0x700
@@ -63,51 +176,23 @@ DLC    : 1
 DATA   : 05
 ```
 
-The ECU responds using CAN ID `0x708`.
-
-For an ECU with no active DTC:
+Response:
 
 ```text
 CAN ID : 0x708
 DLC    : 2
-DATA   : 05 00
+DATA   : 05 XX
 ```
 
-For an over-temperature condition:
+For an active over-temperature condition:
 
 ```text
-CAN ID : 0x708
-DLC    : 2
 DATA   : 05 02
 ```
 
-## 6. Over-Temperature DTC
+## 8. Clear Fault
 
-When the temperature reaches the critical condition, the Fault Manager detects an over-temperature fault.
-
-The DTC Manager then activates the corresponding over-temperature DTC.
-
-Example:
-
-```text
-ADC VALUE: 10500
-TEMP     : 105.00 C
-STATUS   : CRITICAL
-FAULT CODE: 0x02
-FAULT     : Over Temperature
-```
-
-The DTC status becomes:
-
-```text
-DTC STATUS: ACTIVE
-```
-
-## 7. Clear Fault
-
-The diagnostic system also supports clearing the current fault.
-
-The tester sends the clear-fault service:
+The clear-fault diagnostic request uses:
 
 ```text
 CAN ID : 0x700
@@ -115,83 +200,105 @@ DLC    : 1
 DATA   : 04
 ```
 
-The ECU generates a diagnostic response indicating that the clear operation was processed.
+The Diagnostic Manager processes the request and returns a response.
 
-Example:
+The implementation is located in:
 
 ```text
-RESPONSE : 04 00
+services/diagnostic.c
+services/diagnostic.h
 ```
 
-## 8. Diagnostic Flow
+## 9. Fault Management
 
-The diagnostic request processing follows this sequence:
+Fault handling is implemented in:
 
 ```text
-Tester
+services/fault_manager.c
+services/fault_manager.h
+```
+
+The temperature conditions include:
+
+| Temperature | State    | Fault               |
+| ----------: | -------- | ------------------- |
+|        25°C | NORMAL   | No fault            |
+|        80°C | WARNING  | Temperature warning |
+|       105°C | CRITICAL | Over temperature    |
+
+At the critical temperature, the over-temperature fault becomes active.
+
+## 10. DTC Management
+
+DTC functionality is implemented in:
+
+```text
+services/dtc_manager.c
+services/dtc_manager.h
+```
+
+The DTC Manager supports:
+
+* DTC initialization
+* DTC setting
+* DTC status checking
+* DTC clearing
+* DTC information retrieval
+
+For the critical temperature condition, the over-temperature DTC becomes active.
+
+## 11. Complete Diagnostic Flow
+
+For an over-temperature condition:
+
+```text
+ADC Input
    |
-   | CAN Request 0x700
+   v
+Sensor Manager
+   |
+   v
+105°C / CRITICAL
+   |
+   v
+Fault Manager
+   |
+   v
+Over-Temperature Fault
+   |
+   v
+DTC Manager
+   |
+   v
+DTC ACTIVE
+   |
    v
 Diagnostic Manager
    |
-   +---- Read ECU Status
-   |
-   +---- Read DTC
-   |
-   +---- Clear Fault
-   |
    v
-CAN Response 0x708
-   |
-   v
-Tester
+CAN Response
 ```
 
-## 9. Example: Normal Condition
+## 12. Example
 
-For an ADC input of `2500`:
+Running:
 
-```text
-ADC VALUE: 2500
-TEMP     : 25.00 C
-STATUS   : NORMAL
-FAULT CODE: 0x00
-DTC STATUS: CLEAR
+```bash
+./build/ecu 10500
 ```
 
-The diagnostic status response is:
-
-```text
-CAN ID : 0x708
-DATA   : 01 00
-```
-
-## 10. Example: Warning Condition
-
-For an ADC input of `8000`:
-
-```text
-ADC VALUE: 8000
-TEMP     : 80.00 C
-STATUS   : WARNING
-FAULT CODE: 0x01
-```
-
-The diagnostic status response contains the corresponding warning fault code.
-
-## 11. Example: Critical Condition
-
-For an ADC input of `10500`:
+produces the critical temperature condition:
 
 ```text
 ADC VALUE: 10500
 TEMP     : 105.00 C
 STATUS   : CRITICAL
 FAULT CODE: 0x02
+FAULT     : Over Temperature
 DTC STATUS: ACTIVE
 ```
 
-The DTC read response is:
+The diagnostic DTC request then returns:
 
 ```text
 CAN ID : 0x708
@@ -199,30 +306,22 @@ DLC    : 2
 DATA   : 05 02
 ```
 
-## 12. Diagnostic Processing Sequence
+## 13. Diagnostic Test Coverage
 
-The complete diagnostic sequence is:
-
-1. ECU initializes the diagnostic context.
-2. Sensor data is processed.
-3. Fault Manager determines the fault condition.
-4. DTC Manager updates the DTC state.
-5. A diagnostic request is received.
-6. Diagnostic Manager identifies the requested service.
-7. ECU generates the appropriate response.
-8. Response is transmitted through CAN.
-9. A clear-fault request can reset the diagnostic fault state.
-
-## 13. Current Implementation
-
-The diagnostic functionality is implemented using the following project components:
+Diagnostic functionality is tested by:
 
 ```text
-services/
-├── diagnostic.c
-├── diagnostic.h
-├── dtc_manager.c
-└── dtc_manager.h
+tests/test_runner.c
 ```
 
-The diagnostic system is integrated with the Sensor Manager, Fault Manager, DTC Manager, and CAN driver.
+The test suite verifies:
+
+* Diagnostic status reading
+* Diagnostic DTC reading
+* Diagnostic fault clearing
+* CAN initialization
+* CAN frame transmission
+* DTC activation
+* DTC clearing
+
+The latest complete test suite passes successfully.

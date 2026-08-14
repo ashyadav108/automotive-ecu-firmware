@@ -2,66 +2,65 @@
 
 ## 1. Overview
 
-The project includes a C-based unit test suite for validating the main ECU firmware modules.
+The project uses CMake for building and CTest for executing the automated test suite.
 
-The tests are built and executed using CMake and CTest.
-
-The purpose of the test suite is to verify individual firmware components before integrating them into the complete ECU application.
-
-## 2. Test Framework
-
-The project uses:
-
-* C
-* CMake
-* CTest
-* GCC
-
-The unit test application is built as:
+Unit tests are implemented in:
 
 ```text
-firmware_tests
+tests/test_runner.c
 ```
 
-The complete ECU application is built as:
+The tests validate the main ECU software modules including GPIO, ADC, sensor processing, fault management, DTC management, reset management, watchdog, CAN, and diagnostics.
+
+## 2. Testing Architecture
+
+The test environment is:
 
 ```text
-ecu
+test_runner.c
+     |
+     +---- GPIO Driver
+     +---- ADC Driver
+     +---- CAN Driver
+     +---- Watchdog Driver
+     |
+     +---- GPIO HAL
+     +---- ADC HAL
+     +---- CAN HAL
+     |
+     +---- Sensor Manager
+     +---- Fault Manager
+     +---- DTC Manager
+     +---- Diagnostic Manager
+     +---- Reset Manager
+     |
+     v
+Simulated MCU Registers
 ```
 
-## 3. Building the Tests
+## 3. Test Source
 
-Configure the project:
-
-```bash
-cmake -S . -B build
-```
-
-Build the unit tests:
-
-```bash
-cmake --build build --target firmware_tests
-```
-
-## 4. Running the Tests
-
-The complete test suite can be executed using:
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-The latest verified result is:
+The main test file is:
 
 ```text
-100% tests passed, 0 tests failed out of 1
+tests/test_runner.c
 ```
 
-## 5. Test Coverage
+The test runner validates the behavior of the firmware modules without requiring physical MCU hardware.
 
-The unit test application currently validates the following ECU modules:
+## 4. Tested Modules
 
 ### GPIO
+
+Implementation:
+
+```text
+drivers/gpio.c
+drivers/gpio.h
+
+hal/hal_gpio.c
+hal/hal_gpio.h
+```
 
 Tests include:
 
@@ -71,61 +70,127 @@ Tests include:
 
 ### ADC
 
+Implementation:
+
+```text
+drivers/adc.c
+drivers/adc.h
+
+hal/hal_adc.c
+hal/hal_adc.h
+```
+
 Tests include:
 
 * ADC initialization
 
 ### Sensor Manager
 
+Implementation:
+
+```text
+sensors/sensor_manager.c
+sensors/sensor_manager.h
+```
+
 Tests include:
 
 * Sensor initialization
-* ADC-to-temperature conversion
+* Temperature conversion
 * Normal temperature state
 * Warning temperature state
 * Critical temperature state
 
+Test examples:
+
+```text
+2500 ADC -> 25°C
+8000 ADC -> 80°C
+10500 ADC -> 105°C
+```
+
 ### Fault Manager
+
+Implementation:
+
+```text
+services/fault_manager.c
+services/fault_manager.h
+```
 
 Tests include:
 
-* Fault manager initialization
+* Fault Manager initialization
 * Initial fault state
-* Normal temperature operation
+* Normal temperature
 * Over-temperature detection
-* Active fault state
+* Fault activation
 * Fault description
 
 ### DTC Manager
 
+Implementation:
+
+```text
+services/dtc_manager.c
+services/dtc_manager.h
+```
+
 Tests include:
 
 * DTC initialization
-* DTC activation
-* DTC active-state checking
-* DTC clearing
-* DTC inactive-state checking
+* DTC set
+* DTC active check
+* DTC clear
+* DTC inactive check
 * DTC description
-* Low-voltage DTC handling
+* Low-voltage DTC operations
 
 ### Reset Manager
 
+Implementation:
+
+```text
+services/reset_manager.c
+services/reset_manager.h
+```
+
 Tests include:
 
-* Reset manager initialization
+* Reset Manager initialization
 * Initial reset reason
 * Watchdog reset recording
+* Reset count increment
 * Software reset recording
-* Reset counter increment
+* Reset count update
 
 ### Watchdog
+
+Implementation:
+
+```text
+drivers/watchdog.c
+drivers/watchdog.h
+```
 
 Tests include:
 
 * Watchdog initialization
 * Watchdog kick
 
+The watchdog implementation also supports simulated timer progression and timeout detection.
+
 ### CAN
+
+Implementation:
+
+```text
+drivers/can.c
+drivers/can.h
+
+hal/hal_can.c
+hal/hal_can.h
+```
 
 Tests include:
 
@@ -134,97 +199,122 @@ Tests include:
 
 ### Diagnostic Manager
 
+Implementation:
+
+```text
+services/diagnostic.c
+services/diagnostic.h
+```
+
 Tests include:
 
-* Diagnostic status request
-* Diagnostic DTC request
-* Diagnostic fault clearing
+* Diagnostic status read
+* Diagnostic DTC read
+* Diagnostic fault clear
 
-## 6. Temperature Test Cases
+## 5. Simulated Hardware
 
-The Sensor Manager was tested using different simulated ADC values.
-
-| ADC Value | Temperature | Sensor State | Fault               |
-| --------- | ----------- | ------------ | ------------------- |
-| 2500      | 25°C        | NORMAL       | No fault            |
-| 8000      | 80°C        | WARNING      | Temperature warning |
-| 10500     | 105°C       | CRITICAL     | Over temperature    |
-
-These test cases verify the complete sensor-to-fault processing path.
-
-## 7. DTC Testing
-
-The DTC Manager was tested for both activation and clearing.
-
-For the over-temperature condition:
+The simulated hardware is implemented in:
 
 ```text
-Fault detected
-      |
-      v
-DTC activated
-      |
-      v
-DTC status = ACTIVE
-      |
-      v
-Clear request
-      |
-      v
-DTC status = CLEAR
+mcu_sim/mcu_registers.c
+mcu_sim/mcu_registers.h
 ```
 
-The unit tests verify that the DTC changes correctly between active and cleared states.
+It provides simulated peripheral registers for:
 
-## 8. Diagnostic Testing
+* GPIO
+* UART
+* ADC
 
-Diagnostic communication was tested using simulated CAN requests.
+This allows the firmware to be tested on a PC.
 
-The diagnostic request ID is:
+## 6. Build Configuration
+
+The project uses:
 
 ```text
-0x700
+CMake
+C11
+GCC
+CTest
 ```
 
-The diagnostic response ID is:
+Configure the project:
+
+```bash
+cmake -S . -B build
+```
+
+## 7. Build Unit Tests
+
+Build the test executable:
+
+```bash
+cmake --build build --target firmware_tests
+```
+
+A successful build ends with:
 
 ```text
-0x708
+[100%] Built target firmware_tests
 ```
 
-The test suite verifies:
+## 8. Run Tests
 
-* Read status request
-* Read DTC request
-* Clear fault request
+Run the complete test suite:
 
-## 9. CAN Testing
+```bash
+ctest --test-dir build --output-on-failure
+```
 
-A simulated CAN frame is generated by the ECU application.
-
-Example:
+Latest verified result:
 
 ```text
-CAN ID : 0x100
-DLC    : 2
-DATA   : 02 69
+1/1 Test #1: ECU_Firmware_Unit_Tests .......... Passed
+
+100% tests passed, 0 tests failed
 ```
 
-The test suite verifies successful CAN initialization and frame transmission.
+The complete test runner contains:
 
-## 10. ECU Integration Testing
+```text
+Total Tests : 39
+Passed      : 39
+Failed      : 0
+```
 
-In addition to unit tests, the complete ECU executable was tested with different simulated ADC inputs.
+## 9. ECU Build
+
+The main ECU application is implemented in:
+
+```text
+app/main.c
+```
+
+Build it using:
+
+```bash
+cmake --build build --target ecu
+```
+
+A successful build produces:
+
+```text
+build/ecu
+```
+
+## 10. ECU Functional Testing
+
+The ECU can be executed with different simulated ADC values.
 
 ### Normal Condition
-
-Command:
 
 ```bash
 ./build/ecu 2500
 ```
 
-Expected behavior:
+Expected:
 
 ```text
 TEMP     : 25.00 C
@@ -235,13 +325,11 @@ DTC STATUS: CLEAR
 
 ### Warning Condition
 
-Command:
-
 ```bash
 ./build/ecu 8000
 ```
 
-Expected behavior:
+Expected:
 
 ```text
 TEMP     : 80.00 C
@@ -251,13 +339,11 @@ FAULT CODE: 0x01
 
 ### Critical Condition
 
-Command:
-
 ```bash
 ./build/ecu 10500
 ```
 
-Expected behavior:
+Expected:
 
 ```text
 TEMP     : 105.00 C
@@ -266,45 +352,31 @@ FAULT CODE: 0x02
 DTC STATUS: ACTIVE
 ```
 
-## 11. Test Result
+## 11. Test Summary
 
-The current unit test suite passes successfully.
+The current automated test suite covers the major ECU software components:
 
 ```text
-Test project
+GPIO
+ADC
+Sensor Manager
+Fault Manager
+DTC Manager
+Reset Manager
+Watchdog
+CAN
+Diagnostic Manager
+```
 
-1/1 Test #1: ECU_Firmware_Unit_Tests .......... Passed
+The latest verified CTest execution completed successfully with:
 
+```text
 100% tests passed
 0 tests failed
 ```
 
-The firmware application also builds successfully using the `ecu` CMake target.
+## 12. Testing Goal
 
-## 12. Validation Summary
+The testing system demonstrates how embedded firmware modules can be automatically validated on a PC before deployment to physical automotive hardware.
 
-The testing process validates the main firmware flow:
-
-```text
-ADC Input
-    |
-    v
-Sensor Manager
-    |
-    v
-Temperature State
-    |
-    v
-Fault Manager
-    |
-    v
-DTC Manager
-    |
-    v
-Diagnostic Manager
-    |
-    v
-CAN Response
-```
-
-This provides a basic software-level validation environment for the simulated automotive ECU firmware.
+The combination of CMake, CTest, simulated MCU registers, modular drivers, HAL modules, and service-level tests provides a foundation for further firmware verification and CI/CD automation.
